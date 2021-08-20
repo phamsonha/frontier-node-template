@@ -4,7 +4,8 @@ use std::sync::Arc;
 
 use fc_rpc::{OverrideHandle, RuntimeApiStorageOverride, SchemaV1Override, StorageOverride};
 use fc_rpc_core::types::{FilterPool, PendingTransactions};
-use frontier_template_runtime::{opaque::Block, AccountId, Balance, Hash, Index};
+use frontier_template_runtime::{opaque::Block, AccountId, Balance, Index, BlockNumber, Hash};
+use pallet_contracts_rpc::{Contracts, ContractsApi};
 use jsonrpc_pubsub::manager::SubscriptionManager;
 use pallet_ethereum::EthereumStorageSchema;
 use sc_client_api::{
@@ -74,6 +75,8 @@ where
 	C: HeaderBackend<Block> + HeaderMetadata<Block, Error = BlockChainError>,
 	C: Send + Sync + 'static,
 	C::Api: substrate_frame_rpc_system::AccountNonceApi<Block, AccountId, Index>,
+	/*** Add This Line ***/
+	C::Api: pallet_contracts_rpc::ContractsRuntimeApi<Block, AccountId, Balance, BlockNumber>,
 	C::Api: BlockBuilder<Block>,
 	C::Api: pallet_transaction_payment_rpc::TransactionPaymentRuntimeApi<Block, Balance>,
 	C::Api: fp_rpc::EthereumRuntimeRPCApi<Block>,
@@ -170,6 +173,13 @@ where
 		),
 		overrides,
 	)));
+
+	/*** Add This Block ***/
+   	// Contracts RPC API extension
+	io.extend_with(
+		ContractsApi::to_delegate(Contracts::new(client.clone()))
+	);
+	/*** End Added Block ***/
 
 	match command_sink {
 		Some(command_sink) => {

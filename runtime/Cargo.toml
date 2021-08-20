@@ -216,6 +216,25 @@ default-features = false
 git = 'https://github.com/paritytech/substrate.git'
 version = '3.0.0-dev'
 
+[dependencies.pallet-contracts]
+branch = 'frontier'
+default-features = false
+git = 'https://github.com/paritytech/substrate.git' 
+version = '3.0.0-dev'
+
+[dependencies.pallet-contracts-primitives]
+branch = 'frontier'
+default-features = false
+git = 'https://github.com/paritytech/substrate.git' 
+version = '3.0.0-dev'
+
+[dependencies.pallet-contracts-rpc-runtime-api]
+branch = 'frontier'
+default-features = false
+git = 'https://github.com/paritytech/substrate.git' 
+version = '3.0.0-dev'
+
+
 [features]
 aura = []
 default = [
@@ -264,4 +283,7 @@ std = [
     'sp-version/std',
     'frame-benchmarking/std',
     'frame-system-benchmarking/std',
+    'pallet-contracts/std',
+    'pallet-contracts-primitives/std',
+    'pallet-contracts-rpc-runtime-api/std',
 ]

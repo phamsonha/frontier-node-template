@@ -1,13 +1,14 @@
 use frontier_template_runtime::{
 	AccountId, AuraConfig, BalancesConfig, EVMConfig, EthereumConfig, GenesisConfig, GrandpaConfig,
-	Signature, SudoConfig, SystemConfig, WASM_BINARY,
+	Signature, SudoConfig, SystemConfig, WASM_BINARY,ContractsConfig
 };
 use sc_service::ChainType;
 use sp_consensus_aura::sr25519::AuthorityId as AuraId;
 use sp_core::{sr25519, Pair, Public, H160, U256};
 use sp_finality_grandpa::AuthorityId as GrandpaId;
 use sp_runtime::traits::{IdentifyAccount, Verify};
-use std::{collections::BTreeMap, str::FromStr};
+use std::{collections::BTreeMap, str::FromStr}; 
+
 
 // The URL for the telemetry server.
 // const STAGING_TELEMETRY_URL: &str = "wss://telemetry.polkadot.io/submit/";
@@ -132,7 +133,7 @@ fn testnet_genesis(
 	initial_authorities: Vec<(AuraId, GrandpaId)>,
 	root_key: AccountId,
 	endowed_accounts: Vec<AccountId>,
-	_enable_println: bool,
+	enable_println: bool,
 ) -> GenesisConfig {
 	GenesisConfig {
 		frame_system: SystemConfig {
@@ -197,5 +198,13 @@ fn testnet_genesis(
 		},
 		pallet_ethereum: EthereumConfig {},
 		pallet_dynamic_fee: Default::default(),
+		/*** Add This Block ***/
+		pallet_contracts: ContractsConfig {
+			current_schedule: pallet_contracts::Schedule {
+					enable_println,
+					..Default::default()
+			},
+		},
+		/*** End Added Block ***/
 	}
 }

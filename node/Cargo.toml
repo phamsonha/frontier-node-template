@@ -180,6 +180,15 @@ git = 'https://github.com/paritytech/substrate.git'
 branch = 'frontier'
 git = 'https://github.com/paritytech/substrate.git'
 
+
+[dependencies.pallet-contracts]
+branch = 'frontier'
+git = 'https://github.com/paritytech/substrate.git' 
+
+[dependencies.pallet-contracts-rpc]
+branch = 'frontier'
+git = 'https://github.com/paritytech/substrate.git' 
+
 [features]
 aura = ['frontier-template-runtime/aura']
 default = ['aura']
