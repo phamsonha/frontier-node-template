@@ -17,6 +17,12 @@ switch (command) {
   case "--evm-address":
     console.log(require('./evm-address')());
     break;
+  case "--evm":
+    console.log(require('./address')());
+    break;
+  case "--substrate":
+    console.log(require('./address')());
+    break;
   case "--help":
     console.log(help);
     break;

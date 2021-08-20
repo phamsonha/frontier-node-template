@@ -2,10 +2,11 @@ import { ApiPromise, WsProvider, Keyring } from "@polkadot/api";
 import { KeyringPair } from '@polkadot/keyring/types';
 import { U8aFixed } from '@polkadot/types/codec';
 import * as web3Utils from 'web3-utils';
-import * as crypto from '@polkadot/util-crypto';
+import * as crypto from '@polkadot/util-crypto'; 
+import { TypeRegistry } from '@polkadot/types';
+const { spec } = require('@edgeware/node-types');
 
-// Provider is set to localhost for development
-const wsProvider = new WsProvider("ws://localhost:9944");
+
 
 // Keyring needed to sign using Alice account
 const keyring = new Keyring({ type: 'sr25519' });
@@ -13,38 +14,60 @@ const keyring = new Keyring({ type: 'sr25519' });
 // ByteCode of our ERC20 exemple: copied from ./truffle/contracts/MyToken.json
 const ERC20_BYTECODES = require("./truffle/contracts/MyToken.json").bytecode;
 
+const convertToEvmAddress = (substrateAddress) => {
+	const addressBytes = crypto.decodeAddress(substrateAddress);
+	return '0x' + Buffer.from(addressBytes.subarray(0, 20)).toString('hex');
+}
+
+const convertToSubstrateAddress = (evmAddress, prefix = 42) => {
+	const addressBytes = Buffer.from(evmAddress.slice(2), 'hex');
+	const prefixBytes = Buffer.from('evm:');
+	const convertBytes = Uint8Array.from(Buffer.concat([ prefixBytes, addressBytes ]));
+	const finalAddressHex = crypto.blake2AsHex(convertBytes, 256);
+	return crypto.encodeAddress(finalAddressHex, prefix);
+}
+
 // Setup the API and Alice Account
 async function init() {
+	
 	console.log(`Initiating the API (ignore message "Unable to resolve type B..." and "Unknown types found...")`);
 
+	// Provider is set to localhost for development
+	const polkadotUrl = 'ws://127.0.0.1:9944'; 
+	const registry = new TypeRegistry();
 	// Initiate the polkadot API.
-	const api = await ApiPromise.create({
+	var wsProvider = new WsProvider(polkadotUrl);
+
+	const api = await (new ApiPromise({
 		provider: wsProvider,
-		types: {
-			// mapping the actual specified address format
-			Address: "AccountId",
-			// mapping the lookup
-			LookupSource: "AccountId",
-			Account: {
-				nonce: "U256",
-				balance: "U256"
-			},
-			Transaction: {
-				nonce: "U256",
-				action: "String",
-				gas_price: "u64",
-				gas_limit: "u64",
-				value: "U256",
-				input: "Vec<u8>",
-				signature: "Signature"
-			},
-			Signature: {
-				v: "u64",
-				r: "H256",
-				s: "H256"
-			}
-		}
-	});
+		registry,
+		// types: {
+		// 	// mapping the actual specified address format
+		// 	Address: "AccountId",
+		// 	// mapping the lookup
+		// 	LookupSource: "AccountId",
+		// 	Account: {
+		// 		nonce: "U256",
+		// 		balance: "U256"
+		// 	},
+		// 	Transaction: {
+		// 		nonce: "U256",
+		// 		action: "String",
+		// 		gas_price: "u64",
+		// 		gas_limit: "u64",
+		// 		value: "U256",
+		// 		input: "Vec<u8>",
+		// 		signature: "Signature"
+		// 	},
+		// 	Signature: {
+		// 		v: "u64",
+		// 		r: "H256",
+		// 		s: "H256"
+		// 	}
+		// },
+		...spec,
+	  })).isReady;
+
 	console.log(`Initialiation done`);
 	console.log(`Genesis at block: ${api.genesisHash.toHex()}`);
 
@@ -55,11 +78,11 @@ async function init() {
 	console.log(`Alice Substrate Account: ${alice.address}`);
 	console.log(`Alice Substrate Account (nonce: ${nonce}) balance, free: ${balance.free.toHex()}`);
 
-	const aliceEvmAccount = `0x${crypto.blake2AsHex(crypto.decodeAddress(alice.address), 256).substring(26)}`;
+	const aliceEvmAccount = convertToEvmAddress(alice.address);
 
 	console.log(`Alice EVM Account: ${aliceEvmAccount}`);
-	const evmData = (await api.query.evm.accounts(aliceEvmAccount)) as any;
-	console.log(`Alice EVM Account (nonce: ${evmData.nonce}) balance: ${evmData.balance.toHex()}`);
+	// const evmData = (await api.query.evm.accounts(aliceEvmAccount)) as any;
+	// console.log(`Alice EVM Account (nonce: ${evmData.nonce}) balance: ${evmData.balance.toHex()}`);
 
 	return { api, alice, bob };
 }
@@ -72,7 +95,9 @@ async function step1(api: ApiPromise, alice: KeyringPair) {
 	// params: [bytecode, initialBalance, gasLimit, gasPrice],
 	// tx: api.tx.evm.create
 
-	const transaction = await api.tx.evm.create(ERC20_BYTECODES, 0, 4294967295, 1, null);
+	const transaction = await api.tx.evm.create(convertToEvmAddress(alice.address), ERC20_BYTECODES, 0, 4294967295, 1, null);
+
+	console.log (transaction)
 
 	const contract = new Promise<{ block: string, address: string }>(async (resolve, reject) => {
 		const unsub = await transaction.signAndSend(alice, (result) => {
@@ -81,9 +106,10 @@ async function step1(api: ApiPromise, alice: KeyringPair) {
 				console.log(`Contract included at blockHash ${result.status.asInBlock}`);
 				console.log(`Waiting for finalization... (can take a minute)`);
 			} else if (result.status.isFinalized) {
+				// console.log (result)
 				const contractAddress = (
 					result.events?.find(
-						event => event?.event?.index.toHex() == "0x0500"
+						event => event?.event?.index.toHex() == "0x0900"
 					)?.event.data[0] as any
 				).address as string;
 				console.log(`Contract finalized at blockHash ${result.status.asFinalized}`);
@@ -112,7 +138,7 @@ async function step2(api: ApiPromise, alice: KeyringPair, contractAddress: strin
 	console.log(`Contract account code: ${accountCode.substring(0, 16)}...${accountCode.substring(accountCode.length - 16)}`);
 
 	// Computing Contract Storage Slot, using slot 0 and alice EVM account
-	const aliceEvmAccount = `0x${crypto.blake2AsHex(crypto.decodeAddress(alice.address), 256).substring(26)}`;
+	const aliceEvmAccount = convertToEvmAddress(alice.address);
 	const slot = "0";
 	const mapStorageSlot = slot.padStart(64, '0');
 	const mapKey = aliceEvmAccount.toString().substring(2).padStart(64, '0');
@@ -129,7 +155,7 @@ async function step2(api: ApiPromise, alice: KeyringPair, contractAddress: strin
 // Transfer tokens to Bob
 async function step3(api: ApiPromise, alice: KeyringPair, bob: KeyringPair, contractAddress: string) {
 
-	const bobEvmAccount = `0x${crypto.blake2AsHex(crypto.decodeAddress(bob.address), 256).substring(26)}`;
+	const bobEvmAccount = convertToEvmAddress(bob.address);
 	console.log(`\nStep 3: Transfering Tokens to Bob EVM Account: ${bobEvmAccount}`);
 
 	console.log(`Preparing transfer of 0xdd`);
@@ -139,9 +165,9 @@ async function step3(api: ApiPromise, alice: KeyringPair, bob: KeyringPair, cont
 	const tokensToTransfer = `00000000000000000000000000000000000000000000000000000000000000dd`;
 	const inputCode = `0x${transferFnCode}${bobEvmAccount.substring(2)}${tokensToTransfer}`;
 	console.log(`Sending call input: ${inputCode}`);
-	const transaction = await api.tx.evm.call(contractAddress, inputCode, 0, 4294967295, 1, null);
+	const transaction = await api.tx.evm.call(convertToEvmAddress(alice.address), contractAddress, inputCode, 0, 4294967295, 1, null);
 
-	const data = new Promise<{ block: string, address: string }>(async (resolve, reject) => {
+	const data = new Promise<{ block: string, address: string } | void>(async (resolve, reject) => {
 		const unsub = await transaction.signAndSend(alice, (result) => {
 			console.log(`Transfer is ${result.status}`);
 			if (result.status.isInBlock) {
@@ -165,11 +191,11 @@ async function step4(api: ApiPromise, bob: KeyringPair, contractAddress: string)
 	// Retrieve Bob account with new nonce value
 	const { nonce, data: balance } = await api.query.system.account(bob.address);
 	console.log(`Bob Substrate Account (nonce: ${nonce}) balance, free: ${balance.free}`);
-	const bobEvmAccount = `0x${crypto.blake2AsHex(crypto.decodeAddress(bob.address), 256).substring(26)}`;
+	const bobEvmAccount = convertToEvmAddress(bob.address);
 
 	console.log(`Bob EVM Account: ${bobEvmAccount}`);
-	const evmData = (await api.query.evm.accounts(bobEvmAccount)) as any;
-	console.log(`Bob EVM Account (nonce: ${evmData.nonce}) balance: ${evmData.balance.toHex()}`);
+	// const evmData = (await api.query.evm.accounts(bobEvmAccount)) as any;
+	// console.log(`Bob EVM Account (nonce: ${evmData.nonce}) balance: ${evmData.balance.toHex()}`);
 
 	const slot = "0";
 	const mapStorageSlot = slot.padStart(64, '0');

@@ -27,10 +27,11 @@ use sp_std::{marker::PhantomData, prelude::*};
 #[cfg(feature = "std")]
 use sp_version::NativeVersion;
 use sp_version::RuntimeVersion;
+use sp_runtime::print;
 
 // A few exports that help ease life for downstream crates.
 use fp_rpc::TransactionStatus;
-pub use frame_support::{
+pub use frame_support::{ 
 	construct_runtime, parameter_types,
 	traits::{FindAuthor, KeyOwnerProofSystem, Randomness},
 	weights::{
@@ -400,6 +401,7 @@ pub type Executive = frame_executive::Executive<
 >;
 
 impl_runtime_apis! {
+	
 	impl sp_api::Core<Block> for Runtime {
 		fn version() -> RuntimeVersion {
 			VERSION
@@ -490,6 +492,9 @@ impl_runtime_apis! {
 		}
 
 		fn account_code_at(address: H160) -> Vec<u8> {
+			// let account_id : sp_runtime::AccountId32 = pallet_evm::AddressMapping::into_account_id (address);
+			// print("account_id:");
+			// print(account_id);
 			EVM::account_codes(address)
 		}
 
